@@ -38,9 +38,15 @@ trait AsyncEntityReader[ID <: Identifier[_], E <: Entity[ID]]
   protected def traverse[A, R](values: Seq[A], forceSuccess: Boolean)
                               (f: (A) => Future[R])(implicit ctx: Ctx): Future[Seq[R]] = {
     implicit val executor = getExecutionContext(ctx)
-    values.map(f).foldLeft(Future.successful(Seq.empty[R])) {
-      (resultsFuture, resultFuture) =>
-        (for {results <- resultsFuture; result <- resultFuture} yield results :+ result).recoverWith {
+    values.foldLeft(Future.successful(Seq.empty[R])) {
+      (resultsFuture, value) =>
+        resultsFuture.flatMap {
+          results =>
+            f(value).map {
+              result =>
+                results :+ result
+            }
+        }.recoverWith {
           case e => if (forceSuccess) resultsFuture else Future.failed(e)
         }
     }
